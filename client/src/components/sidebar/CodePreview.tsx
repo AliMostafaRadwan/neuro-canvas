@@ -26,17 +26,19 @@ export default function CodePreview() {
   const { toast } = useToast();
   const { theme } = useTheme();
   const [copied, setCopied] = useState(false);
-  
+
   const {
     nodes,
     generatedCode,
     codeNodeMapping,
     isGenerating,
     framework,
+    provider,
     highlightedCodeLine,
     setGeneratedCode,
     setIsGenerating,
     setFramework,
+    setProvider,
     highlightNode,
     serializeGraph,
   } = useCanvasStore();
@@ -57,11 +59,12 @@ export default function CodePreview() {
       const response = await apiRequest("POST", "/api/generate-code", {
         graph,
         framework,
+        provider,
       });
-      
+
       const data = await response.json();
       setGeneratedCode(data.code, data.nodeMapping || {});
-      
+
       toast({
         title: "Code Generated",
         description: `Successfully generated ${framework.toUpperCase()} code`,
@@ -75,15 +78,15 @@ export default function CodePreview() {
     } finally {
       setIsGenerating(false);
     }
-  }, [nodes, framework, serializeGraph, setGeneratedCode, setIsGenerating, toast]);
+  }, [nodes, framework, provider, serializeGraph, setGeneratedCode, setIsGenerating, toast]);
 
   const handleCopy = useCallback(async () => {
     if (!generatedCode) return;
-    
+
     await navigator.clipboard.writeText(generatedCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    
+
     toast({
       title: "Copied!",
       description: "Code copied to clipboard",
@@ -150,7 +153,7 @@ export default function CodePreview() {
         <p className="text-xs text-muted-foreground/70 mt-2 max-w-[200px] mb-6">
           Build your architecture on the canvas, then generate code
         </p>
-        
+
         <div className="space-y-3 w-full max-w-[200px]">
           <Select
             value={framework}
@@ -165,7 +168,22 @@ export default function CodePreview() {
               <SelectItem value="jax">JAX</SelectItem>
             </SelectContent>
           </Select>
-          
+
+          <Select
+            value={provider}
+            onValueChange={(value) => setProvider(value as "gemini" | "openai" | "together" | "openrouter")}
+          >
+            <SelectTrigger className="h-9" data-testid="select-provider">
+              <SelectValue placeholder="Select AI provider" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gemini">Gemini (Default)</SelectItem>
+              <SelectItem value="openai">OpenAI</SelectItem>
+              <SelectItem value="together">Together AI</SelectItem>
+              <SelectItem value="openrouter">OpenRouter</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Button
             onClick={handleGenerateCode}
             disabled={nodes.length === 0}
@@ -197,8 +215,23 @@ export default function CodePreview() {
               <SelectItem value="jax">JAX</SelectItem>
             </SelectContent>
           </Select>
+
+          <Select
+            value={provider}
+            onValueChange={(value) => setProvider(value as "gemini" | "openai" | "together" | "openrouter")}
+          >
+            <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="select-provider-header">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="gemini">Gemini</SelectItem>
+              <SelectItem value="openai">OpenAI</SelectItem>
+              <SelectItem value="together">Together AI</SelectItem>
+              <SelectItem value="openrouter">OpenRouter</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        
+
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -214,7 +247,7 @@ export default function CodePreview() {
               <RefreshCw className="w-4 h-4" />
             )}
           </Button>
-          
+
           <Button
             variant="ghost"
             size="icon"
@@ -229,7 +262,7 @@ export default function CodePreview() {
               <Copy className="w-4 h-4" />
             )}
           </Button>
-          
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -276,7 +309,7 @@ export default function CodePreview() {
                 {tokens.map((line, lineIndex) => {
                   const lineNumber = lineIndex + 1;
                   const isHighlighted = lineNumber === highlightedCodeLine;
-                  
+
                   return (
                     <div
                       key={lineIndex}

@@ -1,21 +1,47 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { generateCodeRequestSchema, exportRequestSchema } from "@shared/schema";
 
-// Lazy initialization of OpenAI client
+// Lazy initialization of AI clients
 let openaiClient: OpenAI | null = null;
+let geminiClient: GoogleGenerativeAI | null = null;
 
 function getOpenAI(): OpenAI {
   if (!openaiClient) {
     if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY environment variable is not set. Please add your OpenAI API key to use code generation.");
+      throw new Error("OPENAI_API_KEY environment variable is not set. Please add your OpenAI API key to use OpenAI provider.");
     }
-    // the newest OpenAI model is "gpt-5" which was released August 7, 2025
     openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
   return openaiClient;
 }
+
+function getGemini(): GoogleGenerativeAI {
+  if (!geminiClient) {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY environment variable is not set. Please add your Gemini API key to use Gemini provider.");
+    }
+    geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  }
+  return geminiClient;
+}
+
+function getTogetherAPIKey(): string {
+  if (!process.env.TOGETHER_API_KEY) {
+    throw new Error("TOGETHER_API_KEY environment variable is not set. Please add your Together API key to use Together provider.");
+  }
+  return process.env.TOGETHER_API_KEY;
+}
+
+function getOpenRouterAPIKey(): string {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY environment variable is not set. Please add your OpenRouter API key to use OpenRouter provider.");
+  }
+  return process.env.OPENROUTER_API_KEY;
+}
+
 
 function serializeGraphToPrompt(graph: {
   nodes: { id: string; type: string; label: string; params: Record<string, unknown>; position: { x: number; y: number } }[];
@@ -23,13 +49,13 @@ function serializeGraphToPrompt(graph: {
   metadata?: { name?: string; description?: string; framework?: string };
 }, framework: string): string {
   const nodeMap = new Map(graph.nodes.map(n => [n.id, n]));
-  
+
   const sortedNodes = [...graph.nodes].sort((a, b) => {
     const aIsSource = graph.edges.some(e => e.source === a.id);
     const aIsTarget = graph.edges.some(e => e.target === a.id);
     const bIsSource = graph.edges.some(e => e.source === b.id);
     const bIsTarget = graph.edges.some(e => e.target === b.id);
-    
+
     if (!aIsTarget && bIsTarget) return -1;
     if (aIsTarget && !bIsTarget) return 1;
     return a.position.y - b.position.y;
@@ -79,11 +105,11 @@ Generate clean, production-ready code. Only output the Python code, no explanati
 function generateNodeMapping(code: string, nodes: { id: string; label: string }[]): Record<string, { startLine: number; endLine: number }> {
   const mapping: Record<string, { startLine: number; endLine: number }> = {};
   const lines = code.split("\n");
-  
+
   nodes.forEach(node => {
     const labelLower = node.label.toLowerCase().replace(/[^a-z0-9]/g, "");
     const idMatch = node.id.replace("node_", "");
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].toLowerCase();
       if (
@@ -99,9 +125,107 @@ function generateNodeMapping(code: string, nodes: { id: string; label: string }[
       }
     }
   });
-  
+
   return mapping;
 }
+
+async function generateCodeWithProvider(
+  prompt: string,
+  framework: string,
+  provider: "gemini" | "openai" | "together" | "openrouter"
+): Promise<string> {
+  const systemMessage = `You are an expert ML engineer who writes clean, production-ready ${framework} code. Generate only valid Python code without markdown formatting or code blocks. The code should be immediately executable.`;
+
+  if (provider === "gemini") {
+    const model = getGemini().getGenerativeModel({
+      model: "gemini-flash-latest",
+      systemInstruction: systemMessage,
+    });
+
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    let code = response.text();
+
+    // Clean up markdown code blocks if present
+    code = code.replace(/```python\n?/g, "").replace(/```\n?/g, "").trim();
+    return code;
+
+  } else if (provider === "openai") {
+    const response = await getOpenAI().chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: prompt },
+      ],
+      max_completion_tokens: 4096,
+    });
+
+    let code = response.choices[0]?.message?.content || "";
+    code = code.replace(/```python\n?/g, "").replace(/```\n?/g, "").trim();
+    return code;
+
+  } else if (provider === "together") {
+    // Together AI uses OpenAI-compatible API
+    const response = await fetch("https://api.together.xyz/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${getTogetherAPIKey()}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        messages: [
+          { role: "system", content: systemMessage },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 4096,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Together API error: ${error}`);
+    }
+
+    const data = await response.json();
+    let code = data.choices[0]?.message?.content || "";
+    code = code.replace(/```python\n?/g, "").replace(/```\n?/g, "").trim();
+  } else if (provider === "openrouter") {
+    // OpenRouter provides access to many models through a unified API
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${getOpenRouterAPIKey()}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://neuro-canvas.app",
+        "X-Title": "Neuro-Canvas",
+      },
+      body: JSON.stringify({
+        model: "anthropic/claude-3.5-sonnet",
+        messages: [
+          { role: "system", content: systemMessage },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 4096,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenRouter API error: ${error}`);
+    }
+
+    const data = await response.json();
+    let code = data.choices[0]?.message?.content || "";
+    code = code.replace(/```python\n?/g, "").replace(/```\n?/g, "").trim();
+    return code;
+  }
+
+  throw new Error(`Unknown provider: ${provider}`);
+}
+
 
 function generateJupyterNotebook(code: string): object {
   return {
@@ -134,7 +258,7 @@ function generateJupyterNotebook(code: string): object {
       {
         cell_type: "code",
         metadata: {},
-        source: code.split("\n").map((line, i, arr) => 
+        source: code.split("\n").map((line, i, arr) =>
           i === arr.length - 1 ? line : line + "\n"
         ),
         execution_count: null,
@@ -172,43 +296,27 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   app.post("/api/generate-code", async (req, res) => {
     try {
       const parsed = generateCodeRequestSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ 
-          error: "Invalid request", 
-          details: parsed.error.errors 
+        return res.status(400).json({
+          error: "Invalid request",
+          details: parsed.error.errors
         });
       }
 
-      const { graph, framework } = parsed.data;
-      
+      const { graph, framework, provider } = parsed.data;
+
       if (graph.nodes.length === 0) {
         return res.status(400).json({ error: "Graph has no nodes" });
       }
 
       const prompt = serializeGraphToPrompt(graph, framework);
 
-      const response = await getOpenAI().chat.completions.create({
-        model: "gpt-5",
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert ML engineer who writes clean, production-ready ${framework} code. Generate only valid Python code without markdown formatting or code blocks. The code should be immediately executable.`,
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_completion_tokens: 4096,
-      });
-
-      let code = response.choices[0]?.message?.content || "";
-      
-      code = code.replace(/```python\n?/g, "").replace(/```\n?/g, "").trim();
+      // Generate code using the selected provider
+      const code = await generateCodeWithProvider(prompt, framework, provider);
 
       const nodeMapping = generateNodeMapping(code, graph.nodes);
 
@@ -219,7 +327,7 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Code generation error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to generate code",
         message: error instanceof Error ? error.message : "Unknown error",
       });
@@ -230,9 +338,9 @@ export async function registerRoutes(
     try {
       const parsed = exportRequestSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ 
-          error: "Invalid request", 
-          details: parsed.error.errors 
+        return res.status(400).json({
+          error: "Invalid request",
+          details: parsed.error.errors
         });
       }
 
@@ -254,7 +362,7 @@ export async function registerRoutes(
       }
     } catch (error) {
       console.error("Export error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to export",
         message: error instanceof Error ? error.message : "Unknown error",
       });

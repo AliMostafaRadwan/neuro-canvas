@@ -55,7 +55,7 @@ export default function RightPanel({ isCollapsed, onToggle }: RightPanelProps) {
   }
 
   return (
-    <div className="w-80 border-l border-border bg-card flex flex-col">
+    <div className="w-full h-full border-l border-border bg-card flex flex-col">
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as "properties" | "code")}

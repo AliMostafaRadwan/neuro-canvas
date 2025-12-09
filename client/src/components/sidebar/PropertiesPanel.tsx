@@ -93,7 +93,7 @@ function ParamField({ name, value, onChange, schema }: ParamFieldProps) {
           }}
           min={schema?.minimum}
           max={schema?.maximum}
-          step={value.toString().includes(".") ? 0.01 : 1}
+          step={(value as number).toString().includes(".") ? 0.01 : 1}
           className="h-9"
           data-testid={`input-param-${name}`}
         />
