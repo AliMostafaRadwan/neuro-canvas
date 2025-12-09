@@ -1,0 +1,48 @@
+
+
+**Project Vision:** "Neuro-Canvas" is a visual, no-code/low-code development environment that allows Data Scientists and ML Engineers to design complex neural network architectures (like Transformers) by dragging and connecting visual blocks. The system then automatically generates the production-ready code (e.g., PyTorch/TensorFlow) for that architecture using a Large Language Model (LLM).
+
+**Objective:** detailed functional requirements for the Minimum Viable Product (MVP) and immediate post-MVP features, focusing on system behavior, data flow, and user interaction logic.
+
+
+
+### **1. The Visual Workspace (The Canvas)**
+* **Infinite Canvas:** The user must be able to pan and zoom on an infinite 2D plane.
+* **Drag-and-Drop Interface:** Users should be able to drag items from a sidebar palette onto the canvas.
+* **Connection Logic:**
+    * **Nodes & Edges:** Blocks (Nodes) must have distinct input and output "ports." Users create "Edges" by dragging from an output port of one block to an input port of another.
+    * **Type Safety (Visual):** The system should visually indicate compatible connections. If a user tries to connect two incompatible blocks (e.g., mismatched tensor dimensions), the connection line should turn red or snap back, providing a tooltip explaining *why*.
+* **Grouping/Encapsulation:** Users must be able to select multiple blocks and "Group" them into a single "Super-Block" (e.g., grouping a Linear, ReLU, and Dropout layer into a "FeedForward Block"). This Super-Block can then be saved and reused.
+
+### **2. The Block Library & Logic**
+* **Core Blocks:** The system must support a standard library of ML components, including but not limited to:
+    * *Layers:* Linear/Dense, Conv2D, LSTM/GRU.
+    * *Activations:* ReLU, Gelu, Softmax, Sigmoid.
+    * *Operations:* Add, Concatenate, Flatten, Normalization (LayerNorm/BatchNorm).
+    * *Attention:* Multi-Head Attention, Scaled Dot-Product.
+* **Properties Panel:** When a block is selected, a side panel must open dynamically.
+    * *Adaptive Fields:* The fields shown must change based on the block type (e.g., a Conv2D block shows "Kernel Size" and "Stride," while a Linear block shows "In/Out Features").
+    * *Validation:* Input fields must prevent invalid values (e.g., negative learning rates or zero dimensions).
+
+### **3. The "AI Compiler" (Code Generation Engine)**
+* **Graph Serialization:** The system must convert the visual diagram into a structured intermediate representation (JSON/Graph Object) that captures the topology and parameters.
+* **Context-Aware Prompting:** The system needs a logic layer that translates this graph into a natural language prompt for the LLM. The prompt must:
+    * Describe the architecture hierarchically.
+    * Explicitly define data flow, especially for complex routing (like Residual/Skip connections).
+    * Specify the desired output framework (user-selectable: PyTorch, TensorFlow, JAX).
+* **Live Preview:** As the user builds, the code should regenerate or update in near real-time in a split-screen view.
+* **Code Explanation:** Hovering over a line of generated code should highlight the corresponding block on the visual canvas, and vice-versa (bi-directional mapping).
+
+### **4. Advanced Features & Enhancements (To Be Included)**
+* **Dimension Calculator (Auto-Inference):** Instead of forcing users to manually calculate input/output sizes for every layer, the system should attempt to infer them. If Block A outputs `[Batch, 128]` and connects to Block B, Block B's input size should auto-set to `128`.
+* **"Dry Run" Simulation:** A feature to pass a "dummy tensor" through the architecture to verify shapes. The system should flag exactly where a dimension mismatch occurs before any code is exported.
+* **Template Marketplace:** A "Load Preset" modal offering standard architectures (BERT, ResNet-50, GPT-2). Loading a template populates the canvas with that fully editable graph.
+* **Version History:** A localized "Undo/Redo" stack and a "Snapshot" feature to save different versions of an architecture (e.g., "Experiment A - 8 Heads" vs. "Experiment B - 12 Heads").
+
+### **5. Export & Integration**
+* **Export Options:**
+    * *Script Download:* `.py` file.
+    * *Notebook Download:* `.ipynb` file with training loop boilerplate included.
+    * *Config Download:* YAML/JSON configuration for the architecture.
+* **"Chat with Model" Prototype:** A feature where, after the code is generated, the user can click "Deploy Prototype." The system spins up a lightweight instance, loads the untrained model, and allows the user to inspect the model summary or pass a simple input to see the raw output structure.
+
