@@ -8,10 +8,18 @@ import {
   Layers,
   Activity,
   Grid3X3,
-  Timer
+  Timer,
+  Hash,
+  Sparkles,
+  Target,
+  Shuffle,
+  Database,
+  Cpu,
+  RotateCcw,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { NodeData, BlockCategory } from "@shared/schema";
+import type { NodeData, BlockCategory, PortPosition } from "@shared/schema";
 import { getBlockDefinition } from "@/lib/blocks";
 
 const categoryIcons: Record<BlockCategory, typeof Box> = {
@@ -21,26 +29,30 @@ const categoryIcons: Record<BlockCategory, typeof Box> = {
   attention: Brain,
 };
 
-const categoryColors: Record<BlockCategory, { bg: string; border: string; accent: string }> = {
+const categoryColors: Record<BlockCategory, { bg: string; border: string; accent: string; glow: string }> = {
   layer: {
-    bg: "bg-blue-500/10 dark:bg-blue-500/20",
-    border: "border-blue-500/30 dark:border-blue-500/40",
-    accent: "bg-blue-500",
+    bg: "bg-gradient-to-br from-blue-500/15 to-blue-600/10 dark:from-blue-500/25 dark:to-blue-600/15",
+    border: "border-blue-500/40 dark:border-blue-400/50",
+    accent: "bg-gradient-to-r from-blue-500 to-blue-600",
+    glow: "shadow-blue-500/20",
   },
   activation: {
-    bg: "bg-emerald-500/10 dark:bg-emerald-500/20",
-    border: "border-emerald-500/30 dark:border-emerald-500/40",
-    accent: "bg-emerald-500",
+    bg: "bg-gradient-to-br from-emerald-500/15 to-emerald-600/10 dark:from-emerald-500/25 dark:to-emerald-600/15",
+    border: "border-emerald-500/40 dark:border-emerald-400/50",
+    accent: "bg-gradient-to-r from-emerald-500 to-emerald-600",
+    glow: "shadow-emerald-500/20",
   },
   operation: {
-    bg: "bg-amber-500/10 dark:bg-amber-500/20",
-    border: "border-amber-500/30 dark:border-amber-500/40",
-    accent: "bg-amber-500",
+    bg: "bg-gradient-to-br from-amber-500/15 to-amber-600/10 dark:from-amber-500/25 dark:to-amber-600/15",
+    border: "border-amber-500/40 dark:border-amber-400/50",
+    accent: "bg-gradient-to-r from-amber-500 to-amber-600",
+    glow: "shadow-amber-500/20",
   },
   attention: {
-    bg: "bg-purple-500/10 dark:bg-purple-500/20",
-    border: "border-purple-500/30 dark:border-purple-500/40",
-    accent: "bg-purple-500",
+    bg: "bg-gradient-to-br from-purple-500/15 to-purple-600/10 dark:from-purple-500/25 dark:to-purple-600/15",
+    border: "border-purple-500/40 dark:border-purple-400/50",
+    accent: "bg-gradient-to-r from-purple-500 to-purple-600",
+    glow: "shadow-purple-500/20",
   },
 };
 
@@ -53,14 +65,38 @@ const blockTypeIcons: Record<string, typeof Box> = {
   gelu: Zap,
   softmax: Activity,
   sigmoid: Activity,
+  swiglu: Sparkles,
   add: GitMerge,
   concat: GitMerge,
   flatten: Box,
   layernorm: Layers,
   batchnorm: Layers,
-  dropout: Box,
+  rmsnorm: Gauge,
+  dropout: Shuffle,
   multihead_attention: Brain,
+  masked_multihead_attention: Brain,
+  grouped_query_attention: Brain,
+  sliding_window_attention: Brain,
   scaled_dot_product: Brain,
+  embedding: Database,
+  positional_encoding: Hash,
+  position_wise_ffn: Cpu,
+  add_norm: GitMerge,
+  linear_projection: Target,
+  rope: RotateCcw,
+  patch_embedding: Grid3X3,
+  cls_token: Target,
+  mixture_of_experts: Shuffle,
+  cross_entropy_loss: Activity,
+  mse_loss: Activity,
+  kl_divergence_loss: Activity,
+};
+
+const positionToReactFlowPosition: Record<PortPosition, Position> = {
+  top: Position.Top,
+  right: Position.Right,
+  bottom: Position.Bottom,
+  left: Position.Left,
 };
 
 function BlockNode({ data, selected }: NodeProps) {
@@ -86,85 +122,123 @@ function BlockNode({ data, selected }: NodeProps) {
       case "gru":
         return `${params.inputSize} → ${params.hiddenSize}`;
       case "multihead_attention":
+      case "masked_multihead_attention":
         return `d=${params.embedDim}, h=${params.numHeads}`;
+      case "grouped_query_attention":
+        return `d=${params.embedDim}, h=${params.numHeads}, kv=${params.numKVGroups}`;
       case "dropout":
         return `p=${params.p}`;
       case "layernorm":
-        return `${params.normalizedShape}`;
+      case "rmsnorm":
+        return `${params.normalizedShape || params.dim}`;
       case "batchnorm":
         return `${params.numFeatures}`;
+      case "embedding":
+        return `${params.numEmbeddings}×${params.embeddingDim}`;
+      case "position_wise_ffn":
+        return `${params.dModel}→${params.dFF}`;
+      case "mixture_of_experts":
+        return `${params.numExperts} experts, top-${params.topK}`;
+      case "swiglu":
+        return `${params.dModel}→${params.hiddenDim}`;
       default:
         return null;
     }
   }, [nodeData.blockType, nodeData.params]);
 
+  const inputsByPosition = useMemo(() => {
+    if (!definition) return { top: [], left: [], bottom: [], right: [] };
+    return {
+      top: definition.inputs.filter(i => i.position === "top"),
+      left: definition.inputs.filter(i => !i.position || i.position === "left"),
+      bottom: definition.inputs.filter(i => i.position === "bottom"),
+      right: definition.inputs.filter(i => i.position === "right"),
+    };
+  }, [definition]);
+
+  const outputsByPosition = useMemo(() => {
+    if (!definition) return { top: [], left: [], bottom: [], right: [] };
+    return {
+      top: definition.outputs.filter(o => o.position === "top"),
+      left: definition.outputs.filter(o => o.position === "left"),
+      bottom: definition.outputs.filter(o => o.position === "bottom"),
+      right: definition.outputs.filter(o => !o.position || o.position === "right"),
+    };
+  }, [definition]);
+
+  const renderHandles = (
+    ports: { id: string; type: string; label?: string; position?: PortPosition }[],
+    handleType: "target" | "source",
+    position: Position
+  ) => {
+    const isVertical = position === Position.Top || position === Position.Bottom;
+    
+    return ports.map((port, index) => {
+      const offset = ports.length === 1 
+        ? "50%" 
+        : `${((index + 1) / (ports.length + 1)) * 100}%`;
+      
+      return (
+        <Handle
+          key={port.id}
+          type={handleType}
+          position={position}
+          id={port.id}
+          className={cn(
+            "!w-2.5 !h-2.5 !bg-foreground/50 hover:!bg-primary hover:!w-3.5 hover:!h-3.5",
+            "!border-2 !border-background !rounded-full transition-all duration-150",
+            "hover:!shadow-lg hover:!shadow-primary/30"
+          )}
+          style={isVertical ? { left: offset } : { top: offset }}
+          data-testid={`handle-${handleType}-${port.id}`}
+        />
+      );
+    });
+  };
+
   return (
     <div
       className={cn(
-        "relative px-3 py-2 min-w-[120px] max-w-[240px] transition-all duration-150",
+        "relative px-4 py-3 min-w-[140px] max-w-[260px] transition-all duration-200",
         colors.bg,
         colors.border,
-        "border",
-        isActivation ? "rounded-full" : isOperation ? "rounded-lg" : "rounded-lg",
-        selected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+        "border backdrop-blur-sm",
+        isActivation ? "rounded-2xl" : isOperation ? "rounded-xl" : "rounded-xl",
+        selected && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg",
         nodeData.isHighlighted && "ring-2 ring-chart-4 ring-offset-2 ring-offset-background",
-        "shadow-sm hover:shadow-md"
+        `shadow-md hover:shadow-xl ${colors.glow}`
       )}
       data-testid={`node-block-${nodeData.blockType}`}
     >
       {nodeData.category === "attention" && (
-        <div className={cn("absolute top-0 left-0 right-0 h-1 rounded-t-lg", colors.accent)} />
+        <div className={cn("absolute top-0 left-0 right-0 h-1 rounded-t-xl", colors.accent)} />
       )}
       
-      <div className="flex items-center gap-2">
-        <div className={cn("p-1 rounded", colors.accent, "bg-opacity-20")}>
-          <BlockIcon className="w-4 h-4 text-foreground" />
+      <div className="flex items-center gap-3">
+        <div className={cn(
+          "p-2 rounded-lg",
+          colors.accent,
+          "flex items-center justify-center shadow-sm"
+        )}>
+          <BlockIcon className="w-4 h-4 text-white" />
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="text-sm font-medium truncate">{nodeData.label}</span>
+          <span className="text-sm font-semibold truncate text-foreground">{nodeData.label}</span>
           {paramSummary && (
-            <span className="text-xs text-muted-foreground truncate">{paramSummary}</span>
+            <span className="text-xs text-muted-foreground/80 truncate font-mono">{paramSummary}</span>
           )}
         </div>
       </div>
       
-      {definition?.inputs.map((input, index) => (
-        <Handle
-          key={input.id}
-          type="target"
-          position={Position.Left}
-          id={input.id}
-          className={cn(
-            "!w-2 !h-2 !bg-foreground/60 hover:!bg-foreground hover:!w-3 hover:!h-3",
-            "!border-2 !border-background transition-all duration-150"
-          )}
-          style={{
-            top: definition.inputs.length === 1 
-              ? "50%" 
-              : `${((index + 1) / (definition.inputs.length + 1)) * 100}%`,
-          }}
-          data-testid={`handle-input-${input.id}`}
-        />
-      ))}
+      {renderHandles(inputsByPosition.top, "target", Position.Top)}
+      {renderHandles(inputsByPosition.left, "target", Position.Left)}
+      {renderHandles(inputsByPosition.bottom, "target", Position.Bottom)}
+      {renderHandles(inputsByPosition.right, "target", Position.Right)}
       
-      {definition?.outputs.map((output, index) => (
-        <Handle
-          key={output.id}
-          type="source"
-          position={Position.Right}
-          id={output.id}
-          className={cn(
-            "!w-2 !h-2 !bg-foreground/60 hover:!bg-foreground hover:!w-3 hover:!h-3",
-            "!border-2 !border-background transition-all duration-150"
-          )}
-          style={{
-            top: definition.outputs.length === 1
-              ? "50%"
-              : `${((index + 1) / (definition.outputs.length + 1)) * 100}%`,
-          }}
-          data-testid={`handle-output-${output.id}`}
-        />
-      ))}
+      {renderHandles(outputsByPosition.top, "source", Position.Top)}
+      {renderHandles(outputsByPosition.left, "source", Position.Left)}
+      {renderHandles(outputsByPosition.bottom, "source", Position.Bottom)}
+      {renderHandles(outputsByPosition.right, "source", Position.Right)}
     </div>
   );
 }

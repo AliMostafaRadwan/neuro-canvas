@@ -6,11 +6,15 @@ export type BlockCategory = "layer" | "activation" | "operation" | "attention";
 // Port types for connection validation
 export type PortType = "tensor" | "scalar" | "any";
 
+// Port position for multi-directional handles
+export type PortPosition = "top" | "right" | "bottom" | "left";
+
 // Block port definition
 export interface BlockPort {
   id: string;
   type: PortType;
   label?: string;
+  position?: PortPosition;
 }
 
 // Base block definition for the palette

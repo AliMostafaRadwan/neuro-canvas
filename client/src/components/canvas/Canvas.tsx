@@ -1,4 +1,4 @@
-import { useCallback, useRef, useMemo } from "react";
+import { useCallback, useRef, useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -11,10 +11,15 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useCanvasStore } from "@/lib/store";
 import BlockNode from "./BlockNode";
+import CustomEdge from "./CustomEdge";
 import { cn } from "@/lib/utils";
 
 const nodeTypes = {
   block: BlockNode,
+};
+
+const edgeTypes = {
+  default: CustomEdge,
 };
 
 function CanvasInner() {
@@ -29,7 +34,11 @@ function CanvasInner() {
     onConnect,
     addNode,
     selectNode,
+    selectEdge,
     saveSnapshot,
+    deleteSelected,
+    selectedNodeId,
+    selectedEdgeId,
   } = useCanvasStore();
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -64,7 +73,23 @@ function CanvasInner() {
 
   const onPaneClick = useCallback(() => {
     selectNode(null);
-  }, [selectNode]);
+    selectEdge(null);
+  }, [selectNode, selectEdge]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.key === "Delete" || event.key === "Backspace") && 
+          !["INPUT", "TEXTAREA"].includes((event.target as HTMLElement)?.tagName)) {
+        if (selectedNodeId || selectedEdgeId) {
+          event.preventDefault();
+          deleteSelected();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedNodeId, selectedEdgeId, deleteSelected]);
 
   const proOptions = useMemo(() => ({ hideAttribution: true }), []);
 
@@ -88,33 +113,38 @@ function CanvasInner() {
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         proOptions={proOptions}
         fitView
         snapToGrid
         snapGrid={[20, 20]}
         className="bg-background"
         defaultEdgeOptions={{
-          animated: true,
+          type: "default",
           style: { strokeWidth: 2 },
+        }}
+        connectionLineStyle={{
+          strokeWidth: 2,
+          stroke: "hsl(var(--primary))",
         }}
       >
         <Background
           variant={BackgroundVariant.Dots}
           gap={40}
-          size={1}
+          size={1.5}
           className="!bg-background"
-          color="hsl(var(--muted-foreground) / 0.2)"
+          color="hsl(var(--muted-foreground) / 0.15)"
         />
         <Controls
           className={cn(
-            "!bg-card !border-border !shadow-md",
-            "[&_button]:!bg-card [&_button]:!border-border [&_button]:!fill-foreground",
-            "[&_button:hover]:!bg-accent"
+            "!bg-card/95 !backdrop-blur-sm !border-border !shadow-lg !rounded-xl",
+            "[&_button]:!bg-card [&_button]:!border-border [&_button]:!fill-foreground [&_button]:!rounded-lg",
+            "[&_button:hover]:!bg-accent [&_button:hover]:!fill-primary"
           )}
           data-testid="canvas-controls"
         />
         <MiniMap
-          className="!bg-card !border-border !shadow-md"
+          className="!bg-card/95 !backdrop-blur-sm !border-border !shadow-lg !rounded-xl"
           nodeColor={(node) => {
             const category = (node.data as { category?: string })?.category;
             switch (category) {
@@ -130,7 +160,7 @@ function CanvasInner() {
                 return "hsl(var(--muted))";
             }
           }}
-          maskColor="hsl(var(--background) / 0.8)"
+          maskColor="hsl(var(--background) / 0.85)"
           style={{ width: 160, height: 120 }}
           data-testid="canvas-minimap"
         />

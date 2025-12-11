@@ -16,6 +16,7 @@ interface CanvasState {
   nodes: Node<NodeData>[];
   edges: Edge<EdgeData>[];
   selectedNodeId: string | null;
+  selectedEdgeId: string | null;
   highlightedNodeId: string | null;
   highlightedCodeLine: number | null;
   generatedCode: string;
@@ -38,6 +39,7 @@ interface CanvasState {
   deleteNode: (nodeId: string) => void;
   deleteEdge: (edgeId: string) => void;
   selectNode: (nodeId: string | null) => void;
+  selectEdge: (edgeId: string | null) => void;
   highlightNode: (nodeId: string | null) => void;
   setHighlightedCodeLine: (line: number | null) => void;
   setGeneratedCode: (code: string, mapping: Record<string, { startLine: number; endLine: number }>) => void;
@@ -52,12 +54,17 @@ interface CanvasState {
   undo: () => void;
   redo: () => void;
   clearCanvas: () => void;
+  deleteSelected: () => void;
 }
 
 let nodeIdCounter = 0;
 
-function generateNodeId(): string {
-  return `node_${++nodeIdCounter}`;
+function generateNodeId(existingIds: Set<string>): string {
+  let id: string;
+  do {
+    id = `node_${++nodeIdCounter}`;
+  } while (existingIds.has(id));
+  return id;
 }
 
 function validateConnection(
@@ -95,6 +102,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   nodes: [],
   edges: [],
   selectedNodeId: null,
+  selectedEdgeId: null,
   highlightedNodeId: null,
   highlightedCodeLine: null,
   generatedCode: "",
@@ -151,7 +159,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const definition = getBlockDefinition(type);
     if (!definition) return "";
 
-    const id = generateNodeId();
+    const existingIds = new Set(get().nodes.map(n => n.id));
+    const id = generateNodeId(existingIds);
     const newNode: Node<NodeData> = {
       id,
       type: "block",
@@ -189,15 +198,28 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   deleteEdge: (edgeId) => {
     set({
       edges: get().edges.filter(e => e.id !== edgeId),
+      selectedEdgeId: get().selectedEdgeId === edgeId ? null : get().selectedEdgeId,
     });
   },
 
   selectNode: (nodeId) => {
     set({
       selectedNodeId: nodeId,
+      selectedEdgeId: null,
       nodes: get().nodes.map(node => ({
         ...node,
         data: { ...node.data, isSelected: node.id === nodeId },
+      })),
+    });
+  },
+
+  selectEdge: (edgeId) => {
+    set({
+      selectedEdgeId: edgeId,
+      selectedNodeId: null,
+      nodes: get().nodes.map(node => ({
+        ...node,
+        data: { ...node.data, isSelected: false },
       })),
     });
   },
@@ -244,6 +266,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   loadGraph: (graph) => {
+    const nodeIds = new Set(graph.nodes.map(n => n.id));
+    
     const nodes: Node<NodeData>[] = graph.nodes.map(n => {
       const definition = getBlockDefinition(n.type);
       return {
@@ -259,15 +283,37 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       };
     });
 
-    const edges: Edge<EdgeData>[] = graph.edges.map(e => ({
-      id: e.id,
-      source: e.source,
-      sourceHandle: e.sourceHandle,
-      target: e.target,
-      targetHandle: e.targetHandle,
-      data: { isValid: true },
-      animated: true,
-    }));
+    const validEdges: Edge<EdgeData>[] = graph.edges
+      .filter(e => {
+        if (!nodeIds.has(e.source) || !nodeIds.has(e.target)) {
+          console.warn(`Skipping edge ${e.id}: references non-existent node`);
+          return false;
+        }
+        const sourceNode = graph.nodes.find(n => n.id === e.source);
+        const targetNode = graph.nodes.find(n => n.id === e.target);
+        if (!sourceNode || !targetNode) return false;
+        
+        const sourceDef = getBlockDefinition(sourceNode.type);
+        const targetDef = getBlockDefinition(targetNode.type);
+        
+        const hasSourceHandle = !e.sourceHandle || sourceDef?.outputs.some(o => o.id === e.sourceHandle);
+        const hasTargetHandle = !e.targetHandle || targetDef?.inputs.some(i => i.id === e.targetHandle);
+        
+        if (!hasSourceHandle || !hasTargetHandle) {
+          console.warn(`Skipping edge ${e.id}: invalid handle reference`);
+          return false;
+        }
+        return true;
+      })
+      .map(e => ({
+        id: e.id,
+        source: e.source,
+        sourceHandle: e.sourceHandle,
+        target: e.target,
+        targetHandle: e.targetHandle,
+        data: { isValid: true },
+        animated: true,
+      }));
 
     const maxId = Math.max(0, ...graph.nodes.map(n => {
       const match = n.id.match(/node_(\d+)/);
@@ -275,7 +321,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }));
     nodeIdCounter = maxId;
 
-    set({ nodes, edges, selectedNodeId: null });
+    set({ nodes, edges: validEdges, selectedNodeId: null, selectedEdgeId: null });
   },
 
   createSuperBlock: (nodeIds, name) => {
@@ -344,6 +390,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   clearCanvas: () => {
     get().saveSnapshot();
-    set({ nodes: [], edges: [], selectedNodeId: null, generatedCode: "", codeNodeMapping: {} });
+    set({ nodes: [], edges: [], selectedNodeId: null, selectedEdgeId: null, generatedCode: "", codeNodeMapping: {} });
+  },
+
+  deleteSelected: () => {
+    const { selectedNodeId, selectedEdgeId, deleteNode, deleteEdge, saveSnapshot } = get();
+    if (selectedNodeId) {
+      saveSnapshot();
+      deleteNode(selectedNodeId);
+    } else if (selectedEdgeId) {
+      saveSnapshot();
+      deleteEdge(selectedEdgeId);
+    }
   },
 }));

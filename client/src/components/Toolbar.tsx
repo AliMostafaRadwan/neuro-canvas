@@ -1,12 +1,14 @@
+import { useRef } from "react";
 import {
   Undo2,
   Redo2,
-  Group,
   Trash2,
   Download,
-  Save,
+  Upload,
   LayoutGrid,
   Sparkles,
+  FileJson,
+  Library,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -19,26 +21,33 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCanvasStore } from "@/lib/store";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import ArchitectureLibrary from "@/components/ArchitectureLibrary";
+import type { SerializedGraph } from "@shared/schema";
 
 export default function Toolbar() {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     nodes,
     selectedNodeId,
+    selectedEdgeId,
     undoStack,
     redoStack,
     generatedCode,
     undo,
     redo,
-    deleteNode,
+    deleteSelected,
     clearCanvas,
     serializeGraph,
+    loadGraph,
+    saveSnapshot,
     setIsGenerating,
     setGeneratedCode,
     framework,
@@ -59,9 +68,12 @@ export default function Toolbar() {
   };
 
   const handleDelete = () => {
-    if (selectedNodeId) {
-      deleteNode(selectedNodeId);
-      toast({ title: "Deleted", description: "Block removed" });
+    if (selectedNodeId || selectedEdgeId) {
+      deleteSelected();
+      toast({ 
+        title: "Deleted", 
+        description: selectedNodeId ? "Block removed" : "Connection removed" 
+      });
     }
   };
 
@@ -70,6 +82,61 @@ export default function Toolbar() {
       clearCanvas();
       toast({ title: "Cleared", description: "Canvas cleared" });
     }
+  };
+
+  const handleSaveArchitecture = () => {
+    const graph = serializeGraph();
+    const dataStr = JSON.stringify(graph, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `architecture_${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Saved",
+      description: "Architecture saved to file",
+    });
+  };
+
+  const handleImportArchitecture = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const graph = JSON.parse(content) as SerializedGraph;
+        
+        if (!graph.nodes || !graph.edges) {
+          throw new Error("Invalid architecture file");
+        }
+        
+        saveSnapshot();
+        loadGraph(graph);
+        toast({
+          title: "Imported",
+          description: `Loaded ${graph.nodes.length} blocks`,
+        });
+      } catch (error) {
+        toast({
+          title: "Import Failed",
+          description: "Invalid architecture file format",
+          variant: "destructive",
+        });
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
   };
 
   const handleGenerateCode = async () => {
@@ -149,13 +216,24 @@ export default function Toolbar() {
   };
 
   return (
-    <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-card">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center">
-            <Sparkles className="w-4 h-4 text-primary-foreground" />
+    <header className="flex items-center justify-between h-14 px-4 border-b border-border bg-card/95 backdrop-blur-sm">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+      
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-lg shadow-primary/25">
+            <Sparkles className="w-5 h-5 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-sm">Neuro-Canvas</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-sm tracking-tight">Neuro-Canvas</span>
+            <span className="text-[10px] text-muted-foreground -mt-0.5">Neural Network Builder</span>
+          </div>
         </div>
       </div>
 
@@ -167,6 +245,7 @@ export default function Toolbar() {
               size="icon"
               onClick={handleUndo}
               disabled={undoStack.length === 0}
+              className="h-9 w-9"
               data-testid="button-undo"
             >
               <Undo2 className="w-4 h-4" />
@@ -182,6 +261,7 @@ export default function Toolbar() {
               size="icon"
               onClick={handleRedo}
               disabled={redoStack.length === 0}
+              className="h-9 w-9"
               data-testid="button-redo"
             >
               <Redo2 className="w-4 h-4" />
@@ -198,13 +278,14 @@ export default function Toolbar() {
               variant="ghost"
               size="icon"
               onClick={handleDelete}
-              disabled={!selectedNodeId}
+              disabled={!selectedNodeId && !selectedEdgeId}
+              className="h-9 w-9"
               data-testid="button-delete"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Delete Selected</TooltipContent>
+          <TooltipContent>Delete Selected (Del)</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -214,6 +295,7 @@ export default function Toolbar() {
               size="icon"
               onClick={handleClear}
               disabled={nodes.length === 0}
+              className="h-9 w-9"
               data-testid="button-clear"
             >
               <LayoutGrid className="w-4 h-4" />
@@ -224,6 +306,36 @@ export default function Toolbar() {
 
         <Separator orientation="vertical" className="h-6 mx-2" />
 
+        <ArchitectureLibrary
+          trigger={
+            <Button variant="outline" size="sm" className="h-9 px-3">
+              <Library className="w-4 h-4 mr-2" />
+              Templates
+            </Button>
+          }
+        />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 px-3">
+              <FileJson className="w-4 h-4 mr-2" />
+              File
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="center">
+            <DropdownMenuItem onClick={handleSaveArchitecture} disabled={nodes.length === 0}>
+              <Download className="w-4 h-4 mr-2" />
+              Save Architecture
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleImportArchitecture}>
+              <Upload className="w-4 h-4 mr-2" />
+              Import Architecture
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Separator orientation="vertical" className="h-6 mx-2" />
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -231,14 +343,14 @@ export default function Toolbar() {
               size="sm"
               onClick={handleGenerateCode}
               disabled={nodes.length === 0}
-              className="px-4"
+              className="h-9 px-4 bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/25"
               data-testid="button-generate"
             >
               <Sparkles className="w-4 h-4 mr-2" />
-              Generate
+              Generate Code
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Generate Code</TooltipContent>
+          <TooltipContent>Generate Neural Network Code</TooltipContent>
         </Tooltip>
 
         <DropdownMenu>
@@ -247,6 +359,7 @@ export default function Toolbar() {
               variant="outline"
               size="sm"
               disabled={!generatedCode}
+              className="h-9"
               data-testid="button-export"
             >
               <Download className="w-4 h-4 mr-2" />
