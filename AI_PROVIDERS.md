@@ -60,6 +60,9 @@ TOGETHER_API_KEY=your_together_api_key_here
 
 # OpenRouter (Optional)
 OPENROUTER_API_KEY=your_openrouter_api_key_here
+
+# Mistral (Optional)
+MISTRAL_API_KEY=your_mistral_api_key_here
 ```
 
 **Note**: You only need to configure the provider(s) you want to use. Gemini is recommended as the default.
@@ -74,14 +77,14 @@ npm run dev
 
 ## Provider Comparison
 
-| Feature | Gemini | OpenAI | Together AI | OpenRouter |
-|---------|--------|--------|-------------|------------|
-| **Model** | Gemini 2.0 Flash | GPT-4o | LLaMA 3.1 70B | Claude 3.5 Sonnet |
-| **Free Tier** | ✅ Yes (generous) | ❌ No | ✅ Yes (limited) | ✅ Yes (limited) |
-| **Speed** | ⚡ Very Fast | 🚀 Fast | 🚀 Fast | 🚀 Fast |
-| **Code Quality** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **Context Length** | 128K tokens | 128K tokens | 128K tokens | 200K tokens |
-| **Best For** | General use, cost-effective | Premium quality, latest features | Open source, customization | Access to multiple models |
+| Feature | Gemini | OpenAI | Together AI | OpenRouter | Mistral |
+|---------|--------|--------|-------------|------------|---------|
+| **Model** | gemini-flash-latest | GPT-4o | LLaMA 3.1 70B | Claude 3.5 Sonnet | Mistral codestral-latest |
+| **Free Tier** | ✅ Yes (generous) | ❌ No | ❌ No | ✅ Yes (limited) | ✅ Yes (limited) |
+| **Speed** | ⚡ Very Fast | 🚀 Fast | 🚀 Fast | 🚀 Fast | 🚀 Fast |
+| **Code Quality** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Context Length** | 128K tokens | 128K tokens | 128K tokens | 200K tokens | 128K tokens |
+| **Best For** | General use, cost-effective | Premium quality, latest features | Open source, customization | Access to multiple models | General use, cost-effective |
 
 ## Using the Provider Selector
 
@@ -154,6 +157,7 @@ GEMINI_API_KEY=      # Google Gemini API key
 OPENAI_API_KEY=      # OpenAI API key
 TOGETHER_API_KEY=    # Together AI API key
 OPENROUTER_API_KEY=  # OpenRouter API key
+MISTRAL_API_KEY=     # Mistral API key
 
 # Database (optional - uses in-memory if not set)
 DATABASE_URL=postgresql://user:password@localhost:5432/neurocanvas
