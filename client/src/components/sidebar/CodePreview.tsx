@@ -171,7 +171,7 @@ export default function CodePreview() {
 
           <Select
             value={provider}
-            onValueChange={(value) => setProvider(value as "gemini" | "openai" | "together" | "openrouter")}
+            onValueChange={(value) => setProvider(value as "gemini" | "openai" | "together" | "openrouter" | "mistral")}
           >
             <SelectTrigger className="h-9" data-testid="select-provider">
               <SelectValue placeholder="Select AI provider" />
@@ -181,6 +181,7 @@ export default function CodePreview() {
               <SelectItem value="openai">OpenAI</SelectItem>
               <SelectItem value="together">Together AI</SelectItem>
               <SelectItem value="openrouter">OpenRouter</SelectItem>
+              <SelectItem value="mistral">Mistral</SelectItem>
             </SelectContent>
           </Select>
 
@@ -218,7 +219,7 @@ export default function CodePreview() {
 
           <Select
             value={provider}
-            onValueChange={(value) => setProvider(value as "gemini" | "openai" | "together" | "openrouter")}
+            onValueChange={(value) => setProvider(value as "gemini" | "openai" | "together" | "openrouter" | "mistral")}
           >
             <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="select-provider-header">
               <SelectValue />
@@ -228,6 +229,7 @@ export default function CodePreview() {
               <SelectItem value="openai">OpenAI</SelectItem>
               <SelectItem value="together">Together AI</SelectItem>
               <SelectItem value="openrouter">OpenRouter</SelectItem>
+              <SelectItem value="mistral">Mistral</SelectItem>
             </SelectContent>
           </Select>
         </div>

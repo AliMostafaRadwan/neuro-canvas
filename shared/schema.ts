@@ -99,7 +99,7 @@ export const generateCodeRequestSchema = z.object({
     }).optional(),
   }),
   framework: z.enum(["pytorch", "tensorflow", "jax"]).default("pytorch"),
-  provider: z.enum(["gemini", "openai", "together", "openrouter"]).default("gemini"),
+  provider: z.enum(["gemini", "openai", "together", "openrouter", "mistral"]).default("gemini"),
 });
 
 export type GenerateCodeRequest = z.infer<typeof generateCodeRequestSchema>;

@@ -7,6 +7,7 @@ Neuro-Canvas now supports multiple AI providers for code generation. You can cho
 - **OpenAI** (GPT-4o)
 - **Together AI** (Meta LLaMA 3.1 70B)
 - **OpenRouter** (Access to 100+ models including Claude, GPT-4, LLaMA, etc.)
+- **Mistral** (Codestral - specialized for coding)
 
 
 ## Quick Start

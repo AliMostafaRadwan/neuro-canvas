@@ -26,7 +26,7 @@ interface CanvasState {
   undoStack: SerializedGraph[];
   redoStack: SerializedGraph[];
   framework: "pytorch" | "tensorflow" | "jax";
-  provider: "gemini" | "openai" | "together" | "openrouter";
+  provider: "gemini" | "openai" | "together" | "openrouter" | "mistral";
 
   // Actions
   setNodes: (nodes: Node<NodeData>[]) => void;
@@ -45,7 +45,7 @@ interface CanvasState {
   setGeneratedCode: (code: string, mapping: Record<string, { startLine: number; endLine: number }>) => void;
   setIsGenerating: (isGenerating: boolean) => void;
   setFramework: (framework: "pytorch" | "tensorflow" | "jax") => void;
-  setProvider: (provider: "gemini" | "openai" | "together" | "openrouter") => void;
+  setProvider: (provider: "gemini" | "openai" | "together" | "openrouter" | "mistral") => void;
   serializeGraph: () => SerializedGraph;
   loadGraph: (graph: SerializedGraph) => void;
   createSuperBlock: (nodeIds: string[], name: string) => void;
@@ -267,7 +267,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   loadGraph: (graph) => {
     const nodeIds = new Set(graph.nodes.map(n => n.id));
-    
+
     const nodes: Node<NodeData>[] = graph.nodes.map(n => {
       const definition = getBlockDefinition(n.type);
       return {
@@ -292,13 +292,13 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         const sourceNode = graph.nodes.find(n => n.id === e.source);
         const targetNode = graph.nodes.find(n => n.id === e.target);
         if (!sourceNode || !targetNode) return false;
-        
+
         const sourceDef = getBlockDefinition(sourceNode.type);
         const targetDef = getBlockDefinition(targetNode.type);
-        
+
         const hasSourceHandle = !e.sourceHandle || sourceDef?.outputs.some(o => o.id === e.sourceHandle);
         const hasTargetHandle = !e.targetHandle || targetDef?.inputs.some(i => i.id === e.targetHandle);
-        
+
         if (!hasSourceHandle || !hasTargetHandle) {
           console.warn(`Skipping edge ${e.id}: invalid handle reference`);
           return false;

@@ -2,11 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { Mistral } from '@mistralai/mistralai';
 import { generateCodeRequestSchema, exportRequestSchema } from "@shared/schema";
 
 // Lazy initialization of AI clients
 let openaiClient: OpenAI | null = null;
 let geminiClient: GoogleGenerativeAI | null = null;
+let mistralClient: Mistral | null = null;
 
 function getOpenAI(): OpenAI {
   if (!openaiClient) {
@@ -26,6 +28,16 @@ function getGemini(): GoogleGenerativeAI {
     geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
   return geminiClient;
+}
+
+function getMistral(): Mistral {
+  if (!mistralClient) {
+    if (!process.env.MISTRAL_API_KEY) {
+      throw new Error("MISTRAL_API_KEY environment variable is not set. Please add your Mistral API key to use Mistral provider.");
+    }
+    mistralClient = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
+  }
+  return mistralClient;
 }
 
 function getTogetherAPIKey(): string {
@@ -132,7 +144,7 @@ function generateNodeMapping(code: string, nodes: { id: string; label: string }[
 async function generateCodeWithProvider(
   prompt: string,
   framework: string,
-  provider: "gemini" | "openai" | "together" | "openrouter"
+  provider: "gemini" | "openai" | "together" | "openrouter" | "mistral"
 ): Promise<string> {
   const systemMessage = `You are an expert ML engineer who writes clean, production-ready ${framework} code. Generate only valid Python code without markdown formatting or code blocks. The code should be immediately executable.`;
 
@@ -219,6 +231,18 @@ async function generateCodeWithProvider(
 
     const data = await response.json();
     let code = data.choices[0]?.message?.content || "";
+    code = code.replace(/```python\n?/g, "").replace(/```\n?/g, "").trim();
+    return code;
+  } else if (provider === "mistral") {
+    const response = await getMistral().chat.complete({
+      model: 'codestral-latest',
+      messages: [
+        { role: 'system', content: systemMessage },
+        { role: 'user', content: prompt }
+      ],
+    });
+
+    let code = (response.choices && response.choices[0] && response.choices[0].message.content) as string || "";
     code = code.replace(/```python\n?/g, "").replace(/```\n?/g, "").trim();
     return code;
   }
