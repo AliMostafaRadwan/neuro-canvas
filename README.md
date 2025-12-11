@@ -4,7 +4,11 @@ Neuro-Canvas is a powerful, AI-powered visual code generator for neural network 
 
 ### 🎥 Demo Video
 
-https://github.com/user-attachments/assets/demo.mp4
+
+
+https://github.com/user-attachments/assets/ef579801-55e5-4d3e-81f7-8209bc21113e
+
+
 
 ### 📸 Screenshots
 
