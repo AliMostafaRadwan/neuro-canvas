@@ -10,7 +10,7 @@ https://github.com/user-attachments/assets/demo.mp4
 
 | Website Interface | Recreating Transformers |
 |:---:|:---:|
-| ![Website Interface](assets/picture.png) | ![Transformers Architecture](assets/transformers.png) |
+| ![Website Interface](assets/picture.png?v=2) | ![Transformers Architecture](assets/transformers.png) |
 
 > *Easily recreate complex architectures like the Transformer model (right) using our visual builder (left).*
 
